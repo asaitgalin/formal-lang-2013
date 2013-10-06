@@ -68,6 +68,13 @@ void hashTable_clear(hashTable_t *table) {
     }
 }
 
+int hashTable_checkRebuild(hashTable_t *table) {
+    if (((float)table->size / (float)table->capacity) > fillCoefficient) {
+        return hashTable_rebuild(table);
+    }
+    return 0;
+}
+
 int hashTable_setValue(hashTable_t *table, const char *name, int value) {
     if (!name) {
         return -1;
@@ -78,12 +85,7 @@ int hashTable_setValue(hashTable_t *table, const char *name, int value) {
     if (!node) {
         if (varList_pushBack(&table->items[hash], name, value) == 0) {
             ++table->size;
-            if (((float)table->size / (float)table->capacity) > fillCoefficient) {
-                if (hashTable_rebuild(table) != 0) {
-                    return -1;   
-                }
-            }
-            return 0;
+            return hashTable_checkRebuild(table);
         }
         return -1;
     }
@@ -101,13 +103,8 @@ int hashTable_getValue(hashTable_t *table, const char *name, int *value) {
     if (!node) {
         if (varList_pushBack(&table->items[hash], name, 0) == 0) {
             ++table->size;
-            if (((float)table->size / (float)table->capacity) > fillCoefficient) {
-                if (hashTable_rebuild(table) != 0) {
-                    return -1;   
-                }
-            }
             *value = 0;
-            return 0;
+            return hashTable_checkRebuild(table);
         }
         return -1;
     }

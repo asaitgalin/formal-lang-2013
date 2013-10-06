@@ -4,99 +4,122 @@
 #include <stdlib.h>
 
 #include "variable_table.h"
+#include "offset_array.h"
+#include "types.h"
 
-#define MAX_ARGCOUNT 3
+#define MAX_ARGCOUNT 5
 
 size_t lineCount;
+size_t currentLine;
+offsetArray_t offsets;
 hashTable_t table;
 
-enum commands_t {
-    C_LET = 0,
-    C_MOV, 
-    C_ADD, C_SUB, C_MUL, C_DIV,
-    C_JMP, C_CMP, // to be implemented
-    C_OUT
-};
-
-enum argType_t {
-    AT_NUMBER = 0,
-    AT_VARIABLE
-};
-
-typedef struct {
-    int argType;
-    char *name;
-    int value;
-} argument_t;
-
-typedef struct {
-    size_t needCount;
-    size_t currentCount;
-    int currentCmd;
-} lexerState_t;
 
 lexerState_t state;
 argument_t arguments[MAX_ARGCOUNT];
 
+void raiseError() {
+    fprintf(stderr, "Command syntax error\n, line: %zd", currentLine);
+    exit(-1);
+}
+
 void updateState(int newCmd, size_t newNeedCount) {
+    if (state.currentCount != state.needCount) {
+        raiseError();
+    }
     state.currentCmd = newCmd;
     state.needCount = newNeedCount;
     state.currentCount = 0;
+}
+
+int extractOperand(int argNum) {
+    if (arguments[0].argType == AT_VARIABLE) {
+        int value;
+        hashTable_getValue(&table, arguments[argNum].name, &value);
+        free(arguments[argNum].name);
+        return value;
+    } else {
+        return arguments[argNum].value;
+    }
+}
+
+void jumpToLine(int line) {
+    int fileOffset;
+    if (offsetArray_get(&offsets, line, &fileOffset) != 0)  {
+        fprintf(stderr, "Line index out of bounds, line: %zd\n", currentLine);
+    }
+    fseek(yyin, fileOffset, SEEK_SET);
+    currentLine = line;
+    yyrestart(yyin);
+}
+
+void processArithmetic() {
+    if (arguments[2].argType != AT_VARIABLE) {
+        raiseError();
+    }
+    int firstVal = extractOperand(0);
+    int secondVal = extractOperand(1);
+
+    int resultVal = firstVal + secondVal;
+    if (state.currentCmd == C_SUB) {
+        resultVal = firstVal - secondVal;
+    } else if (state.currentCmd == C_MUL) {
+        resultVal = firstVal * secondVal;
+    } else if (state.currentCmd == C_DIV) {
+        resultVal = firstVal / secondVal;
+    }
+    hashTable_setValue(&table, arguments[2].name, resultVal);
+    free(arguments[2].name);
+}
+
+void processCondition() {
+    if (arguments[2].argType != AT_NUMBER || arguments[3].argType != AT_NUMBER || arguments[4].argType != AT_NUMBER) {
+        raiseError();
+    }
+    int firstVal = extractOperand(0);
+    int secondVal = extractOperand(1);
+    int lines[3];
+    lines[0] = extractOperand(2);
+    lines[1] = extractOperand(3);
+    lines[2] = extractOperand(4);
+    if (firstVal < secondVal) {
+        jumpToLine(lines[0]);
+    } else if (firstVal == secondVal) {
+        jumpToLine(lines[1]);
+    } else {
+        jumpToLine(lines[2]);
+    }
 }
 
 void processCmd() {
     switch (state.currentCmd) {
         case C_LET:
             if (arguments[0].argType != AT_VARIABLE || arguments[1].argType != AT_NUMBER) {
-                fprintf(stderr, "Command let syntax error\n, line: %d", lineCount);
-                exit(-1);
+                raiseError();
             }
             hashTable_setValue(&table, arguments[0].name, arguments[1].value);
             free(arguments[0].name);
             break;
         case C_OUT:
             if (arguments[0].argType != AT_VARIABLE) {
-                fprintf(stderr, "Command out syntax error\n, line: %d", lineCount);
-                exit(-1);
+                raiseError();
             }
-            int value;
-            hashTable_getValue(&table, arguments[0].name, &value);
-            printf("%d\n", value);
-            free(arguments[0].name);
+            printf("%d\n", extractOperand(0));
             break;
         case C_ADD:
         case C_SUB:
         case C_MUL:
         case C_DIV:
-            if (arguments[2].argType != AT_VARIABLE) {
-                fprintf(stderr, "Command add syntax error\n, line: %d", lineCount);
-                exit(-1);
+            processArithmetic();
+            break;
+        case C_JMP:
+            if (arguments[0].argType != AT_NUMBER) {
+                raiseError();
             }
-            int firstVal, secondVal;
-            // Process first arg
-            if (arguments[0].argType == AT_NUMBER) {
-                firstVal = arguments[0].value;
-            } else {
-                hashTable_getValue(&table, arguments[0].name, &firstVal);
-                free(arguments[0].name);
-            }
-            // Process second arg
-            if (arguments[1].argType == AT_NUMBER) {
-                secondVal = arguments[1].value;
-            } else {
-                hashTable_getValue(&table, arguments[1].name, &secondVal);
-                free(arguments[1].name);
-            }
-            int resultVal = firstVal + secondVal;
-            if (state.currentCmd == C_SUB) {
-                resultVal = firstVal - secondVal;
-            } else if (state.currentCmd == C_MUL) {
-                resultVal = firstVal * secondVal;
-            } else if (state.currentCmd == C_DIV) {
-                resultVal = firstVal / secondVal;
-            }
-            hashTable_setValue(&table, arguments[2].name, resultVal);
-            free(arguments[2].name);
+            jumpToLine(arguments[0].value);
+            break;
+        case C_CMP:
+            processCondition(); 
             break;
     }
 }
@@ -109,15 +132,15 @@ SPACE       [ \t]+
 
 %%
 
-let                    { updateState(C_LET, 2);   }
-mov                    { updateState(C_MOV, 2);   }
-add                    { updateState(C_ADD, 3);   }
-sub                    { updateState(C_SUB, 3);   }
-mul                    { updateState(C_MUL, 3);   }
-div                    { updateState(C_DIV, 3);   }
-jmp                    { printf("Jmp command\n"); }
-cmp                    { printf("Cmp command\n"); }
-out                    { updateState(C_OUT, 1);   }
+let                    {    updateState(C_LET, 2);   }
+mov                    {    updateState(C_MOV, 2);   }
+add                    {    updateState(C_ADD, 3);   }
+sub                    {    updateState(C_SUB, 3);   }
+mul                    {    updateState(C_MUL, 3);   }
+div                    {    updateState(C_DIV, 3);   }
+jmp                    {    updateState(C_JMP, 1);   }
+cmp                    {    updateState(C_CMP, 5);   }
+out                    {    updateState(C_OUT, 1);   }
 
 {NUMBER}               {    
                             int index = state.currentCount;
@@ -132,7 +155,7 @@ out                    { updateState(C_OUT, 1);   }
 {VARIABLE}             {   
                             int index = state.currentCount;
                             arguments[index].argType = AT_VARIABLE;
-                            arguments[index].name = (char *)calloc(strlen(yytext) + 1, sizeof(char));
+                            arguments[index].name = (char *)calloc(yyleng + 1, sizeof(char));
                             strcpy(arguments[index].name, yytext);
                             ++state.currentCount;
                             if (state.currentCount == state.needCount) {
@@ -140,23 +163,43 @@ out                    { updateState(C_OUT, 1);   }
                             }
                        }
 
-{SPACE}                // skip all spaces
+{SPACE}                // Skip all spaces 
 
-\n                     { ++lineCount; }
-.                      { printf("Syntax error, line: %d", lineCount); }
+\n                     { ++currentLine; }
+
+.                      { printf("Syntax error near character: %s, line: %zd\n", yytext, currentLine); }
 
 %%
 
+void getLinesInfo(FILE *f) {
+    int c;
+    int cursor = 0;
+    int prevPos = 0;
+    lineCount = 0;
+    while ((c = fgetc(f)) != EOF) {
+        if (c == '\n') {
+            ++lineCount;
+            offsetArray_put(&offsets, prevPos);
+            prevPos = cursor;
+        }
+        ++cursor;
+    }
+    fseek(f, 0, SEEK_SET);
+}
+
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        yyin = stdin;
-    } else {
-        yyin = fopen(argv[1], "r");
-    }
-    lineCount = 0;
+        fprintf(stderr, "Too few arguments. Usage: tacinterp input.tac\n");
+        exit(-1);
+    } 
+    currentLine = 0;
+    yyin = fopen(argv[1], "r");
+    offsetArray_init(10, &offsets);
+    getLinesInfo(yyin);
     hashTable_init(7, &table);
     yylex();	
 	hashTable_clear(&table);
+    offsetArray_clear(&offsets);
     return 0;
 }
 
