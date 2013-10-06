@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall --std=c99 -ggdb
+CFLAGS = -Wall --std=c99
 FLEX = flex
 RM = rm -rf
 OUTPUT = tacinterp
