@@ -33,7 +33,7 @@ void updateState(int newCmd, size_t newNeedCount) {
 }
 
 int extractOperand(int argNum) {
-    if (arguments[0].argType == AT_VARIABLE) {
+    if (arguments[argNum].argType == AT_VARIABLE) {
         int value;
         hashTable_getValue(&table, arguments[argNum].name, &value);
         free(arguments[argNum].name);
@@ -79,9 +79,11 @@ void processCondition() {
     int firstVal = extractOperand(0);
     int secondVal = extractOperand(1);
     int lines[3];
+
     lines[0] = extractOperand(2);
     lines[1] = extractOperand(3);
     lines[2] = extractOperand(4);
+
     if (firstVal < secondVal) {
         jumpToLine(lines[0]);
     } else if (firstVal == secondVal) {
@@ -105,6 +107,13 @@ void processCmd() {
                 raiseError();
             }
             printf("%d\n", extractOperand(0));
+            break;
+        case C_MOV:
+            if (arguments[0].argType != AT_VARIABLE || arguments[0].argType != AT_VARIABLE) {
+                raiseError();
+            }
+            int value = extractOperand(0);
+            hashTable_setValue(&table, arguments[1].name, value);
             break;
         case C_ADD:
         case C_SUB:
