@@ -14,12 +14,11 @@ size_t currentLine;
 offsetArray_t offsets;
 hashTable_t table;
 
-
 lexerState_t state;
 argument_t arguments[MAX_ARGCOUNT];
 
 void raiseError() {
-    fprintf(stderr, "Command syntax error\n, line: %zd", currentLine);
+    fprintf(stderr, "Command syntax error, line: %zd\n", currentLine);
     exit(-1);
 }
 
@@ -46,7 +45,7 @@ int extractOperand(int argNum) {
 void jumpToLine(int line) {
     int fileOffset;
     if (offsetArray_get(&offsets, line, &fileOffset) != 0)  {
-        fprintf(stderr, "Line index out of bounds, line: %zd\n", currentLine);
+        fprintf(stderr, "Error: line index out of bounds, line: %zd\n", currentLine);
     }
     fseek(yyin, fileOffset, SEEK_SET);
     currentLine = line;
@@ -152,16 +151,25 @@ cmp                    {    updateState(C_CMP, 5);   }
 out                    {    updateState(C_OUT, 1);   }
 
 {NUMBER}               {    
+                            if (state.currentCmd == C_NONE) {
+                                fprintf(stderr, "Syntax error, arguments without command, line: %zd\n", currentLine);
+                                exit(-1);
+                            }
                             int index = state.currentCount;
                             arguments[index].argType = AT_NUMBER;
                             arguments[index].value = atoi(yytext);
                             ++state.currentCount;
                             if (state.currentCount == state.needCount) {
                                 processCmd();
+                                state.currentCmd = C_NONE;
                             }
                        }
 
 {VARIABLE}             {   
+                            if (state.currentCmd == C_NONE) {
+                                fprintf(stderr, "Syntax error, variable without command, line: %zd\n", currentLine);
+                                exit(-1);
+                            }
                             int index = state.currentCount;
                             arguments[index].argType = AT_VARIABLE;
                             arguments[index].name = (char *)calloc(yyleng + 1, sizeof(char));
@@ -169,6 +177,7 @@ out                    {    updateState(C_OUT, 1);   }
                             ++state.currentCount;
                             if (state.currentCount == state.needCount) {
                                 processCmd();
+                                state.currentCmd = C_NONE;
                             }
                        }
 
@@ -176,7 +185,14 @@ out                    {    updateState(C_OUT, 1);   }
 
 \n                     { ++currentLine; }
 
-.                      { printf("Syntax error near character: %s, line: %zd\n", yytext, currentLine); }
+.                      { fprintf(stderr, "Syntax error near character: %s, line: %zd\n", yytext, currentLine); }
+
+<<EOF>>                {    
+                            if (state.currentCmd != C_NONE) {
+                                fprintf(stderr, "Syntax error: unexpected end of file\n"); 
+                            }
+                            yyterminate();
+                       }
 
 %%
 
@@ -198,14 +214,19 @@ void getLinesInfo(FILE *f) {
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        fprintf(stderr, "Too few arguments. Usage: tacinterp input.tac\n");
+        fprintf(stderr, "Error: too few arguments. Usage: tacinterp input.tac\n");
         exit(-1);
     } 
-    currentLine = 0;
     yyin = fopen(argv[1], "r");
+    if (!yyin) {
+        fprintf(stderr, "Error: input file not found\n");
+        exit(-1);
+    }
     offsetArray_init(10, &offsets);
-    getLinesInfo(yyin);
     hashTable_init(7, &table);
+    state.currentCmd = C_NONE;
+    currentLine = 0;
+    getLinesInfo(yyin);
     yylex();	
 	hashTable_clear(&table);
     offsetArray_clear(&offsets);

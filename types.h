@@ -2,7 +2,8 @@
 #define _TYPES_H_
 
 enum commands_t {
-    C_LET = 0,
+    C_NONE = 0,
+    C_LET,
     C_MOV, 
     C_ADD, C_SUB, C_MUL, C_DIV,
     C_JMP, C_CMP, 
