@@ -1,0 +1,35 @@
+HAI
+
+I HAS A va ITZ "teststring"
+VISIBLE va , I HAS A va2
+va2 R SUM OF...
+        PRODUKT OF...
+        3 AN 6 AN 5
+VISIBLE va2 5 6 7
+VISIBLE SUM OF SUM OF 3 AN 2 AN 5
+VISIBLE BOTH OF FAIL WIN
+VISIBLE SUM OF 1 AN 2
+VISIBLE ANY OF FAIL AN FAIL AN FAIL WIN MKAY SUM OF 2 3
+VISIBLE SMOOSH 1 2 3 45 "df" AN "dfdf" MKAY
+I HAS A vaUntyped
+vaUntyped IS NOW A NUMBR
+VISIBLE vaUntyped
+
+IT
+
+SUM OF 4 5
+SUM OF IT 9
+VISIBLE IT
+
+VISIBLE ...
+        BOTH SAEM ...
+                SUM OF 3 4 ...
+        AN ...
+                PRODUKT OF 7 1.0
+
+VISIBLE ...
+        DIFFRINT 3 4 ...
+        DIFFRINT 7 7.0
+
+KTHXBYE
+
