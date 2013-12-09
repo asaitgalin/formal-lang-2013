@@ -33,34 +33,13 @@ public:
         type_(type)
     { }
     
-    void setLocalVariable(const std::string &name, Value *val) {
-        auto it = variables_.find(name);
-        if  (it == variables_.end()) {
-            if (parent_ == NULL) {
-                raiseMachineError("cannot set undeclared variable: \"" + name + "\"");
-            } else {
-                parent_->setLocalVariable(name, val);
-            }
-        } else {
-            variables_[name] = val;
-        }
-    }
+    void setLocalVariable(const std::string &name, Value *val);
 
     void declareVariable(const std::string &name, Value *initVal) {
         variables_[name] = initVal;
     }
 
-    Value *getLocalVariable(const std::string &name) {
-        auto it = variables_.find(name);
-        if (it == variables_.end()) {
-            if (parent_ == NULL) {
-                raiseMachineError("use of unreferenced variable: \"" + name + "\"");
-            } else {
-                return parent_->getLocalVariable(name);
-            }
-        }
-        return it->second;
-    }
+    Value *getLocalVariable(const std::string &name);
 
     // Temp variable IT
     void setTempValue(Value *tmp) { temp_ = tmp; }
@@ -408,25 +387,7 @@ public:
         endLabel_(endLabel)
     { }
 
-    virtual stmtResult_t execute(CodeBlock *block) {
-        if (label_ != endLabel_) {
-            raiseMachineError("cycle label \"" + label_ + "\" does not match \"" + endLabel_ + "\"");
-        }
-        CodeBlock *innerBlock = new CodeBlock(block, BT_CYCLE);
-        bool stopped = false;
-        while (!stopped) {
-            for (auto it = stmts_->stmtList_.cbegin(); it != stmts_->stmtList_.cend(); ++it) {
-                stmtResult_t result = (*it)->execute(innerBlock);
-                if (result == SR_BREAK) {
-                    stopped = true;
-                    break;
-                } else if (result == SR_RETURN) {
-                    raiseMachineError("cannot do FOUND YR from cycle");
-                }
-            }
-        }
-        return SR_NO_RETURN;
-    }
+    virtual stmtResult_t execute(CodeBlock *block);
 
 private:
     std::string label_;
@@ -444,28 +405,7 @@ public:
         list_(list)
     { }
 
-    virtual Value *eval(CodeBlock *block) {
-        program->setLastReturn(NULL);
-        auto function = program->getFunction(name_);
-        auto signature = function.first->getArguments();
-        if (list_->getExprCount() != signature.size()) {
-            raiseMachineError("function call does not match signature of \"" + name_ + "\"");
-        }
-        CodeBlock *innerBlock = new CodeBlock(NULL, BT_FUNCTION);
-        for (size_t i = 0; i < signature.size(); ++i) {
-            innerBlock->declareVariable(signature[i], list_->getExpr(i)->eval(block));
-        }
-        auto stmts = function.second;
-        for (auto it = stmts->stmtList_.cbegin(); it != stmts->stmtList_.cend(); ++it) {
-            stmtResult_t result = (*it)->execute(innerBlock);
-            if (result == SR_BREAK) {
-                return new UntypedValue();
-            } else if (result == SR_RETURN) {
-                return program->getLastReturn();
-            }
-        }
-        return innerBlock->getTempValue();
-    }
+    virtual Value *eval(CodeBlock *block);
 
 private:
     ExprList *list_;

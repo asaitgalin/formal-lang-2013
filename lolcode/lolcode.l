@@ -20,7 +20,7 @@ comment_t comment = COMMENT_DISABLED;
 %}
 
 DIGIT [0-9]
-IDENT [A-Za-z][A-Za-z0-9_]*
+IDENT [_A-Za-z][A-Za-z0-9_]*
 INTEGER ([1-9]{DIGIT}*)|0
 FLOAT ({DIGIT}+[.]{DIGIT}*)|({DIGIT}*[.]{DIGIT}+) 
 FLOAT_EXP ({INTEGER}|{FLOAT})[eE][+-]?{DIGIT}+ 

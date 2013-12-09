@@ -60,7 +60,7 @@ VISIBLE ...
         DIFFRINT 3 4 ...
         DIFFRINT 7 7.0
 
-VISIBLE "Please enter number: this is switch case test"
+VISIBLE "Please enter number:: this is switch case test"
 I HAS A numericInput
 GIMMEH numericInput
 numericInput IS NOW A NUMBR
@@ -124,7 +124,7 @@ IF U SAY SO
 
 I HAS A out
 out R fib fibN
-VISIBLE out
+VISIBLE ":{fibN} fibonacci number is :{out}", BTW Formatted output
 
 VISIBLE "Cycle. :"Hai:" ten times"
 I HAS A counter ITZ 10
