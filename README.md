@@ -31,4 +31,3 @@ All variables are considered as already declared.
 
 LOLCODE interpreter. Uses flex and bison.
 
-Will be here soon :)
