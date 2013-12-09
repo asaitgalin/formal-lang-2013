@@ -19,8 +19,7 @@ Value *castValue(Type *targetType, Value *src) {
         if (successful) {
             result = new FloatValue(floatVal);
         }
-    }
-    if (!successful) {
+    } if (!successful) {
         raiseMachineError("casting failed");
     }
     return result;

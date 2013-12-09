@@ -2,7 +2,7 @@
 #define _LOLCODE_UTILS_H_
 
 #include "lolcode_value.h"
-#include "lolcode_type.h"
+#include "lolcode_type.h" 
 
 struct NumericCastResult {
     Type *type;

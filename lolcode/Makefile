@@ -6,7 +6,7 @@ RM = rm -rf
 OUT = lolcode
 
 HEADER_DEPS = lolcode_utils.h lolcode_value.h lolcode_type.h lolcode_stmt.h
-SOURCE_DEPS = lolcode_type.cpp lolcode_stmt.cpp lolcode_utils.cpp
+SOURCE_DEPS = lolcode_type.cpp lolcode_utils.cpp lolcode_stmt.cpp
 
 all: $(OUT)
 

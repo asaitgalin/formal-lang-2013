@@ -5,72 +5,136 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <list>
 
+#include "lolcode_utils.h"
 #include "lolcode_value.h"
 #include "lolcode_type.h"
-#include "lolcode_utils.h"
 
 extern int yylineno;
 
-/* ===== Interfaces ===== */
-
-class Expr {
-public:
-    virtual Value *eval() = 0;
+enum stmtResult_t {
+    SR_NO_RETURN = 0,
+    SR_BREAK,
+    SR_RETURN
 };
 
-class Stmt {
-public:
-    virtual void execute() = 0;
+enum blockType_t {
+    BT_MAIN_FLOW = 0,
+    BT_CYCLE,
+    BT_FUNCTION
 };
 
-class StmtList {
+class CodeBlock {
 public:
-    void execute() const;
-    void add(Stmt *stmt);
-   
-    // Local variables table
-    void addLocalVariable(const std::string &name, Value *val);
-    Value *getLocalVariable(const std::string &name);
+
+    CodeBlock(CodeBlock *parent, blockType_t type):
+        parent_(parent),
+        type_(type)
+    { }
+    
+    void setLocalVariable(const std::string &name, Value *val) {
+        auto it = variables_.find(name);
+        if  (it == variables_.end()) {
+            if (parent_ == NULL) {
+                raiseMachineError("cannot set undeclared variable: \"" + name + "\"");
+            } else {
+                parent_->setLocalVariable(name, val);
+            }
+        } else {
+            variables_[name] = val;
+        }
+    }
+
+    void declareVariable(const std::string &name, Value *initVal) {
+        variables_[name] = initVal;
+    }
+
+    Value *getLocalVariable(const std::string &name) {
+        auto it = variables_.find(name);
+        if (it == variables_.end()) {
+            if (parent_ == NULL) {
+                raiseMachineError("use of unreferenced variable: \"" + name + "\"");
+            } else {
+                return parent_->getLocalVariable(name);
+            }
+        }
+        return it->second;
+    }
 
     // Temp variable IT
     void setTempValue(Value *tmp) { temp_ = tmp; }
     Value *getTempValue() { return temp_; }
 
+    // Type
+    blockType_t getType() const {
+        return type_;
+    }
+
+    CodeBlock *getParent() {
+        return parent_;
+    }
+
 private:
     std::unordered_map<std::string, Value *> variables_;
-    std::vector<Stmt *> stmtList_;
+    CodeBlock *parent_;
+    blockType_t type_;
     Value *temp_;
 };
 
-extern StmtList *program;
+/* ===== Interfaces ===== */
 
-/* ===== Statements ===== */
-
-class StmtVariableDecl: public Stmt {
+class Expr {
 public:
-   
-    StmtVariableDecl(const char *name, Expr *expr):
-        name_(name), 
-        expr_(expr)
-    { }
+    virtual Value *eval(CodeBlock *block) = 0;
+};
 
-    StmtVariableDecl(const char *name) {
-        name_ = name;
-        expr_ = nullptr;
+class Stmt {
+public:
+    virtual stmtResult_t execute(CodeBlock *block) = 0;
+};
+
+/* ===== Helper classes ===== */
+
+class StmtList {
+public:
+    stmtResult_t execute(CodeBlock *block) const;
+    void add(Stmt *stmt);
+    std::vector<Stmt *> stmtList_;
+};
+
+class FunctionSignature {
+public:
+    
+    void addArgument(const char *name) {
+        args_.push_back(std::string(name));
     }
 
-    virtual void execute() {
-        if (expr_ == nullptr) {
-            program->addLocalVariable(name_, new UntypedValue());
-        } else {
-            program->addLocalVariable(name_, expr_->eval());
-        }
+    const std::vector<std::string> &getArguments() const {
+        return args_;
     }
 
 private:
-    std::string name_;
-    Expr *expr_;
+    std::vector<std::string> args_;
+};
+
+class ElseIfBlockList {
+public:
+    
+    void addBlock(Expr *cond, StmtList *actions) {
+        blocks_.push_back(std::make_pair(cond, actions));
+    }
+
+    std::pair<Expr *, StmtList *> getBlock(size_t index) {
+        return blocks_.at(index);
+    }
+
+    size_t getBlockCount() {
+        return blocks_.size();
+    }
+
+private:
+    std::vector<std::pair<Expr *, StmtList *>> blocks_;
 };
 
 class ExprList {
@@ -92,6 +156,87 @@ private:
     std::vector<Expr *> exprs_;
 };
 
+/* Main program class */
+
+class Program {
+public:
+   
+    Program(StmtList *list) {
+        mainBlock_ = new CodeBlock(NULL, BT_MAIN_FLOW);
+        list_ = list;
+    }
+
+    CodeBlock *getMainBlock() {
+        return mainBlock_;
+    }
+
+    void run() {
+        list_->execute(mainBlock_);
+    }
+    
+    // Functions
+    void addFunction(const std::string &name, FunctionSignature *signature, StmtList *stmts) {
+        if (functions_.find(name) != functions_.cend()) {
+            raiseMachineError("function \"" + name + "\" is already declared");
+        }
+        functions_[name] = std::make_pair(signature, stmts);
+    }
+
+    std::pair<FunctionSignature *, StmtList  *> getFunction(const std::string &name) {
+        return functions_[name];
+    }
+
+    bool hasFunction(const std::string &name) {
+        return functions_.find(name) != functions_.cend();
+    }
+
+    // Return values
+    Value *getLastReturn() {
+        return lastReturn_;
+    }
+
+    void setLastReturn(Value *ret) {
+        lastReturn_ = ret;
+    }
+
+private:
+    std::unordered_map<std::string, std::pair<FunctionSignature *, StmtList *>> functions_;
+    StmtList *list_;
+    CodeBlock *mainBlock_;
+    Value *lastReturn_;
+};
+
+extern Program *program;
+
+/* ===== Statements ===== */
+
+class StmtVariableDecl: public Stmt {
+public:
+   
+    StmtVariableDecl(const char *name, Expr *expr):
+        name_(name), 
+        expr_(expr)
+    { }
+
+    StmtVariableDecl(const char *name) {
+        name_ = name;
+        expr_ = nullptr;
+    }
+
+    virtual stmtResult_t execute(CodeBlock *block) {
+        if (expr_ == nullptr) {
+            block->declareVariable(name_, new UntypedValue());
+        } else {
+            block->declareVariable(name_, expr_->eval(block));
+        }
+        return SR_NO_RETURN;
+    }
+
+private:
+    std::string name_;
+    Expr *expr_;
+};
+
 class StmtPrint: public Stmt {
 public:
 
@@ -100,17 +245,23 @@ public:
         needNewline_(needNewline)
     { }
 
-    virtual void execute() {
+    virtual stmtResult_t execute(CodeBlock *block) {
         for (size_t i = 0; i < list_->getExprCount(); ++i) {
-            Expr *expr = list_->getExpr(i);
-            std::cout << expr->eval()->toString();
+            Expr *expr = list_->getExpr(i); 
+            std::string toPrint = expr->eval(block)->toString();
+            std::cout << transformString(toPrint, block);
         }
         if (needNewline_) {
             std::cout << std::endl;
         }
+        return SR_NO_RETURN;
     }
 
 private:
+
+    std::string stringReplace(const std::string &, const std::string &, const std::string &);
+    std::string transformString(const std::string &, CodeBlock *);
+    
     ExprList *list_;
     bool needNewline_;
 };
@@ -122,10 +273,11 @@ public:
         variable_(variable)
     { }
 
-    virtual void execute() {
+    virtual stmtResult_t execute(CodeBlock *block) {
         std::string input;
         std::cin >> input;
-        program->addLocalVariable(variable_, new StringValue(input));
+        block->setLocalVariable(variable_, new StringValue(input));
+        return SR_NO_RETURN;
     }
 
 private:
@@ -139,14 +291,14 @@ public:
         expr_(expr)
     { }
 
-    virtual void execute() {
-        program->setTempValue(expr_->eval());
+    virtual stmtResult_t execute(CodeBlock *block) {
+        block->setTempValue(expr_->eval(block));
+        return SR_NO_RETURN;
     }
 
 private:
     Expr *expr_;
 };
-
 
 class StmtVariableCast: public Stmt {
 public:
@@ -156,9 +308,10 @@ public:
         type_(type)
     { }
 
-    virtual void execute() {
-        Value *castResult = castValue(type_, program->getLocalVariable(name_));
-        program->addLocalVariable(name_, castResult);
+    virtual stmtResult_t execute(CodeBlock *block) {
+        Value *castResult = castValue(type_, block->getLocalVariable(name_));
+        block->setLocalVariable(name_, castResult);
+        return SR_NO_RETURN;
     }
 
 private:
@@ -166,7 +319,158 @@ private:
     Type *type_;
 };
 
+class StmtConditional: public Stmt {
+public:
+
+    StmtConditional(StmtList *trueStmts, ElseIfBlockList *elseIfBlocks, StmtList *falseStmts):
+        trueStmts_(trueStmts),
+        falseStmts_(falseStmts),
+        elseIfBlocks_(elseIfBlocks)
+    { }
+
+    virtual stmtResult_t execute(CodeBlock *block) {
+        if (block->getTempValue()->toBoolean()) {
+            return trueStmts_->execute(block);
+        }
+        for (size_t i = 0; i < elseIfBlocks_->getBlockCount(); ++i) {
+            auto p = elseIfBlocks_->getBlock(i);
+            if (p.first->eval(block)->toBoolean()) {
+                return p.second->execute(block);
+            }
+        }
+        return falseStmts_->execute(block);
+    }
+
+private:
+    StmtList *trueStmts_;
+    StmtList *falseStmts_;
+    ElseIfBlockList *elseIfBlocks_;
+};
+
+class StmtFunction: public Stmt {
+public:
+    
+    StmtFunction(const char *name, FunctionSignature *signature, 
+            StmtList *statements):
+        name_(name),
+        signature_(signature),
+        statements_(statements)
+    { }
+
+    virtual stmtResult_t execute(CodeBlock *block) {
+        if (block->getType() != BT_MAIN_FLOW) {
+            raiseMachineError("functions can be declared only in main scope");
+        }
+        program->addFunction(name_, signature_, statements_);
+        return SR_NO_RETURN;
+    }
+
+private:
+    std::string name_;
+    FunctionSignature *signature_;
+    StmtList *statements_;
+};
+
+class StmtFunctionReturn: public Stmt {
+public:
+
+    StmtFunctionReturn(Expr *ret):
+        ret_(ret)
+    { }
+
+    virtual stmtResult_t execute(CodeBlock *block) {
+        if (block->getType() == BT_MAIN_FLOW) {
+            raiseMachineError("cannot return from main scope");
+        }
+        if (ret_) {
+            if (block->getType() == BT_FUNCTION) {
+                program->setLastReturn(ret_->eval(block));
+            }
+            return SR_RETURN;
+        } else {
+            if (block->getType() == BT_FUNCTION) {
+                program->setLastReturn(new UntypedValue());
+            }
+            return SR_BREAK;
+        }
+    }
+
+private:
+    Expr *ret_;
+};
+
+class StmtCycle: public Stmt {
+public:
+    
+    StmtCycle(const char *label, StmtList *stmts, const char *endLabel):
+        label_(label),
+        stmts_(stmts),
+        endLabel_(endLabel)
+    { }
+
+    virtual stmtResult_t execute(CodeBlock *block) {
+        if (label_ != endLabel_) {
+            raiseMachineError("cycle label \"" + label_ + "\" does not match \"" + endLabel_ + "\"");
+        }
+        CodeBlock *innerBlock = new CodeBlock(block, BT_CYCLE);
+        bool stopped = false;
+        while (!stopped) {
+            for (auto it = stmts_->stmtList_.cbegin(); it != stmts_->stmtList_.cend(); ++it) {
+                stmtResult_t result = (*it)->execute(innerBlock);
+                if (result == SR_BREAK) {
+                    stopped = true;
+                    break;
+                } else if (result == SR_RETURN) {
+                    raiseMachineError("cannot do FOUND YR from cycle");
+                }
+            }
+        }
+        return SR_NO_RETURN;
+    }
+
+private:
+    std::string label_;
+    StmtList *stmts_;
+    std::string endLabel_;
+};
+
 /* ===== Expressions ===== */ 
+
+class ExprFunctionCall: public Expr {
+public:
+    
+    ExprFunctionCall(const char *name, ExprList *list):
+        name_(name),
+        list_(list)
+    { }
+
+    virtual Value *eval(CodeBlock *block) {
+        program->setLastReturn(NULL);
+        auto function = program->getFunction(name_);
+        auto signature = function.first->getArguments();
+        if (list_->getExprCount() != signature.size()) {
+            raiseMachineError("function call does not match signature of \"" + name_ + "\"");
+        }
+        CodeBlock *innerBlock = new CodeBlock(NULL, BT_FUNCTION);
+        for (size_t i = 0; i < signature.size(); ++i) {
+            innerBlock->declareVariable(signature[i], list_->getExpr(i)->eval(block));
+        }
+        auto stmts = function.second;
+        for (auto it = stmts->stmtList_.cbegin(); it != stmts->stmtList_.cend(); ++it) {
+            stmtResult_t result = (*it)->execute(innerBlock);
+            if (result == SR_BREAK) {
+                return new UntypedValue();
+            } else if (result == SR_RETURN) {
+                return program->getLastReturn();
+            }
+        }
+        return innerBlock->getTempValue();
+    }
+
+private:
+    ExprList *list_;
+    std::string name_;
+};
 
 class ExprVariable: public Expr {
 public:
@@ -175,8 +479,12 @@ public:
         name_(name)
     { }
 
-    virtual Value *eval() {
-        Value *var = program->getLocalVariable(name_);
+    virtual Value *eval(CodeBlock *block) {
+        if (program->hasFunction(name_)) {
+            ExprFunctionCall *call = new ExprFunctionCall(name_.c_str(), new ExprList());
+            return call->eval(block);
+        }
+        Value *var = block->getLocalVariable(name_);
         if (var == NULL) {
             raiseMachineError("reference to undefined variable: " + name_);
         }
@@ -206,7 +514,7 @@ public:
         value_ = new BoolValue(val);
     }
 
-    virtual Value *eval() {
+    virtual Value *eval(CodeBlock *block) {
         return value_;
     }
 
@@ -223,7 +531,7 @@ public:
         rhs_(rhs)
     { }
 
-    virtual Value *eval();
+    virtual Value *eval(CodeBlock *block);
 
 private:
     char op_;
@@ -240,7 +548,7 @@ public:
         rhs_(rhs)
     { }
 
-    virtual Value *eval();
+    virtual Value *eval(CodeBlock *block);
 
 private:
     char op_;
@@ -256,13 +564,13 @@ public:
         op_(op)
     { }
 
-    virtual Value *eval() {
+    virtual Value *eval(CodeBlock *block) {
         bool result = list_->getExpr(0);
         for (size_t i = 1; i < list_->getExprCount(); ++i) {
             if (op_ == '&') {
-                result = result && list_->getExpr(i)->eval()->toBoolean();
+                result = result && list_->getExpr(i)->eval(block)->toBoolean();
             } else {
-                result = result || list_->getExpr(i)->eval()->toBoolean();
+                result = result || list_->getExpr(i)->eval(block)->toBoolean();
             }
         }
         return new BoolValue(result);
@@ -280,10 +588,10 @@ public:
         list_(list)
     { }
 
-    virtual Value *eval() {
+    virtual Value *eval(CodeBlock *block) {
         std::string result;
         for (size_t i = 0; i < list_->getExprCount(); ++i) {
-            result.append(list_->getExpr(i)->eval()->toString());
+            result.append(list_->getExpr(i)->eval(block)->toString());
         }
         return new StringValue(result);
     }
@@ -300,8 +608,8 @@ public:
         type_(type)
     { }
 
-    virtual Value *eval() {
-        return castValue(type_, expr_->eval());
+    virtual Value *eval(CodeBlock *block) {
+        return castValue(type_, expr_->eval(block));
     }
 
 private:
@@ -318,7 +626,7 @@ public:
         op_(op)
     { }
 
-    virtual Value *eval();
+    virtual Value *eval(CodeBlock *block);
 
 private:
     bool isNumeric(Value *val);
@@ -331,8 +639,8 @@ private:
 class ExprTemporary: public Expr {
 public:
     
-    virtual Value *eval() {
-        return program->getTempValue();
+    virtual Value *eval(CodeBlock *block) {
+        return block->getTempValue();
     }
 
 };

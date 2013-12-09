@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cfloat>
 #include <sstream>
+#include <regex>
 
 #include "lolcode_type.h"
 

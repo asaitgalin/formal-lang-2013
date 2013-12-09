@@ -7,6 +7,16 @@
 
 bool lineContinuation = false;
 
+enum comment_t {
+    COMMENT_DISABLED = 0, 
+    COMMENT_SL,
+    COMMENT_ML
+};
+
+comment_t comment = COMMENT_DISABLED;
+
+#define RET(x) if (comment == COMMENT_DISABLED) { return x; }
+
 %}
 
 DIGIT [0-9]
@@ -20,83 +30,106 @@ SPACES [ \t]+
 %option noyywrap
 %option yylineno
 %%
-HAI                       {  return CODE_BEGIN;  }
-KTHXBYE                   {  return CODE_END;  }
-I{SPACES}HAS{SPACES}A     {  return VARIABLE_DECL;  }
-ITZ                       {  return VARIABLE_INIT;  }
-R                         {  return VARIABLE_ASSIGN;  }
+HAI                       {  RET(CODE_BEGIN)  }
+KTHXBYE                   {  RET(CODE_END)  }
+I{SPACES}HAS{SPACES}A     {  RET(VARIABLE_DECL)  }
+ITZ                       {  RET(VARIABLE_INIT)  }
+R                         {  RET(VARIABLE_ASSIGN)  }
 
-IT                        {  return TEMP_VAR;  }
+IT                        {  RET(TEMP_VAR)  }
 
-SUM{SPACES}OF             {  return ADDITION;  }
-DIFF{SPACES}OF            {  return SUBTRACTION;  }
-PRODUKT{SPACES}OF         {  return MULTIPLICATION;  }
-QUOSHUNT{SPACES}OF        {  return DIVISION;  }
-MOD{SPACES}OF             {  return MODULO;  }
-BIGGR{SPACES}OF           {  return BIGGER;  }
-SMALLR{SPACES}OF          {  return SMALLER;  }
+SUM{SPACES}OF             {  RET(ADDITION)  }
+DIFF{SPACES}OF            {  RET(SUBTRACTION)  }
+PRODUKT{SPACES}OF         {  RET(MULTIPLICATION)  }
+QUOSHUNT{SPACES}OF        {  RET(DIVISION)  }
+MOD{SPACES}OF             {  RET(MODULO)  }
+BIGGR{SPACES}OF           {  RET(BIGGER)  }
+SMALLR{SPACES}OF          {  RET(SMALLER)  }
 
-AN                        {  return ARG_SEPARATOR;  } 
-A                         {  return CAST_SEPARATOR;  }
+O{SPACES}RLY\?            {  RET(IF_BEGIN)  }
+YA{SPACES}RLY             {  RET(IF_TRUE)  }
+MEBBE                     {  RET(IF_ELSEIF)  }
+NO{SPACES}WAI             {  RET(IF_FALSE)  }
+OIC                       {  RET(IF_END)  }
 
-BOTH{SPACES}OF            {  return BOOL_AND;  }
-EITHER{SPACES}OF          {  return BOOL_OR;   }
-WON{SPACES}OF             {  return BOOL_XOR;  }
-NOT                       {  return BOOL_NOT;  }
-ALL{SPACES}OF             {  return BOOL_INF_AND;  }
-ANY{SPACES}OF             {  return BOOL_INF_OR;  }
-MKAY                      {  return '\n';  }
+IM{SPACES}IN              {  RET(CYCLE_BEGIN)  }
+IM{SPACES}OUTTA           {  RET(CYCLE_END)  }
 
-BOTH{SPACES}SAEM          {  return EQUALS;  }
-DIFFRINT                  {  return NOT_EQUALS;  }
+HOW{SPACES}DUZ{SPACES}I   {  RET(FUNCTION_BEGIN)  }
+GTFO                      {  RET(FUNCTION_RETURN_NULL)  }
+FOUND{SPACES}YR           {  RET(FUNCTION_RETURN)  }
 
-VISIBLE                   {  return VISIBLE;  }
-!                         {  return VISIBLE_FLAG; }
-GIMMEH                    {  return GET_LINE;  }
+IF{SPACES}U{SPACES}SAY{SPACES}SO {  RET(FUNCTION_END)  }
 
-SMOOSH                    {  return STR_CONCAT;  }
+AN                        {  RET(ARG_SEPARATOR)  } 
+A                         {  RET(CAST_SEPARATOR)  }
+YR                        {  RET(SIGNATURE_SEPARATOR)  }
+
+
+BOTH{SPACES}OF            {  RET(BOOL_AND)  }
+EITHER{SPACES}OF          {  RET(BOOL_OR)   }
+WON{SPACES}OF             {  RET(BOOL_XOR)  }
+NOT                       {  RET(BOOL_NOT)  }
+ALL{SPACES}OF             {  RET(BOOL_INF_AND)  }
+ANY{SPACES}OF             {  RET(BOOL_INF_OR)  }
+MKAY                      {  RET('\n')  }
+
+BOTH{SPACES}SAEM          {  RET(EQUALS)  }
+DIFFRINT                  {  RET(NOT_EQUALS)  }
+
+VISIBLE                   {  RET(VISIBLE)  }
+!                         {  RET(VISIBLE_FLAG) }
+GIMMEH                    {  RET(GET_LINE)  }
+
+SMOOSH                    {  RET(STR_CONCAT)  }
 
 (WIN|FAIL)                {  
                               yylval.boolValue = (yytext[0] == 'W'); 
-                              return BOOL_VALUE;  
+                              RET(BOOL_VALUE)  
                           }                     
 
-MAEK                      {  return CAST;  }
-TROOF                     {  return BOOL_TYPE;  }
-YARN                      {  return STR_TYPE;  }
-NUMBR                     {  return INT_TYPE;  }
-NUMBAR                    {  return FLOAT_TYPE;  }
-NOOB                      {  return UNTYPED_TYPE;  }
-IS{SPACES}NOW{SPACES}A    {  return VARIABLE_TYPE_CHANGE;  } 
+BTW                       {  comment = COMMENT_SL; return SL_COMMENT;  }
+OBTW                      {  comment = COMMENT_ML; return ML_COMMENT_BEGIN;  }
+TLDR                      {  comment = COMMENT_DISABLED; return ML_COMMENT_END;  }
+MAEK                      {  RET(CAST)  }
+TROOF                     {  RET(BOOL_TYPE)  }
+YARN                      {  RET(STR_TYPE)  }
+NUMBR                     {  RET(INT_TYPE)  }
+NUMBAR                    {  RET(FLOAT_TYPE)  }
+NOOB                      {  RET(UNTYPED_TYPE)  }
+IS{SPACES}NOW{SPACES}A    {  RET(VARIABLE_TYPE_CHANGE)  } 
 
 {INTEGER}                 { 
                               sscanf(yytext, "%d", &yylval.intValue); 
-                              return INT_NUMERAL; 
+                              RET(INT_NUMERAL) 
                           } 
 ({FLOAT}|{FLOAT_EXP})     { 
                               sscanf(yytext, "%f", &yylval.floatValue); 
-                              return FLOAT_NUMERAL; 
+                              RET(FLOAT_NUMERAL)
                           }
 {STRING}                  {
                               strncpy(yylval.stringValue, yytext, 
                                       sizeof(yylval.stringValue));
-                              return STRING_LITERAL;
+                              RET(STRING_LITERAL)
                           }
 {IDENT}                   { 
-                              strncpy(yylval.varName, yytext,
+                                strncpy(yylval.varName, yytext,
                                       sizeof(yylval.varName));
-                              return VARIABLE_ID; 
+                                RET(VARIABLE_ID);
                           }
 
-,                         {  return ',';  }
+,                         {  RET(',')  }
 
 {SPACES}                  {  /* skip spaces */  }
 
 \n                        {  
+                              if (comment == COMMENT_SL) {
+                                  comment = COMMENT_DISABLED;
+                              }
                               if (lineContinuation) {
                                   lineContinuation = false;
                               } else {
-                                  return '\n';  
+                                  RET('\n');  
                               }
                           }
 
@@ -105,9 +138,12 @@ IS{SPACES}NOW{SPACES}A    {  return VARIABLE_TYPE_CHANGE;  }
                           }
 
 .                         { 
-                              fprintf(stderr, "LexerError: unknown character '%c', line: %d\n", 
+                              if (comment == COMMENT_DISABLED) {
+                                  fprintf(stderr, "LexerError: unknown character '%c', line: %d\n", 
                                       yytext[0], yylineno);
-                              exit(-1);
+                                      exit(-1);
+                              }
                           }
+
 %%
 

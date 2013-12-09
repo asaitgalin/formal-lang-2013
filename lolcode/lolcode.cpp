@@ -11,7 +11,7 @@ int yyparse();
 extern int yylineno;
 extern FILE *yyin;
 
-StmtList *program;
+Program *program;
 
 void yyerror(string error) {
     cerr << "ParserError: syntax error, line: " << yylineno << endl;
@@ -27,9 +27,8 @@ int main(int argc, char *argv[]) {
         cerr << "IOError: failed to open file: " << argv[1] << endl;
         exit(-1);
     }
-    program = new StmtList();
     yyparse();
-    program->execute();
+    program->run();
     return 0;
 }
 
