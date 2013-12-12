@@ -213,20 +213,46 @@ std::string StmtPrint::transformString(const std::string &s, CodeBlock *block) {
 
 /* StmtCycle */
 
+bool StmtCycle::executeList(CodeBlock *block) {
+    for (auto it = stmts_->stmtList_.cbegin(); it != stmts_->stmtList_.cend(); ++it) {
+        stmtResult_t result = (*it)->execute(block);
+        if (result == SR_BREAK) {
+            return false;
+        } else if (result == SR_RETURN) {
+            raiseMachineError("cannot do FOUND YR from cycle");
+        }
+    }
+    return true;
+}
+
 stmtResult_t StmtCycle::execute(CodeBlock *block) {
     if (label_ != endLabel_) {
         raiseMachineError("cycle label \"" + label_ + "\" does not match \"" + endLabel_ + "\"");
     }
     CodeBlock *innerBlock = new CodeBlock(block, BT_CYCLE);
-    bool stopped = false;
-    while (!stopped) {
-        for (auto it = stmts_->stmtList_.cbegin(); it != stmts_->stmtList_.cend(); ++it) {
-            stmtResult_t result = (*it)->execute(innerBlock);
-            if (result == SR_BREAK) {
+    if (!isIteration_) {
+        bool stopped = false;
+        while (!stopped) {
+            if (!executeList(innerBlock)) {
                 stopped = true;
-                break;
-            } else if (result == SR_RETURN) {
-                raiseMachineError("cannot do FOUND YR from cycle");
+            }
+        }
+    } else {
+        innerBlock->declareVariable(var_, new IntValue(0));
+        if (expr_) {
+            while (canContinue(innerBlock)) {
+                if (!executeList(innerBlock)) {
+                    break;
+                }
+                updateCounter(innerBlock);
+            }
+        } else {
+            bool stopped = false;
+            while (!stopped) {
+                if (!executeList(innerBlock)) {
+                    stopped = true;
+                }
+                updateCounter(innerBlock);
             }
         }
     }

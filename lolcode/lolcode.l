@@ -53,6 +53,10 @@ NO{SPACES}WAI             {  RET(IF_FALSE)  }
 OIC                       {  RET(IF_END)  }
 
 IM{SPACES}IN              {  RET(CYCLE_BEGIN)  }
+UPPIN                     {  RET(CYCLE_INC)  }
+NERFIN                    {  RET(CYCLE_DEC)  }
+TIL                       {  RET(CYCLE_UNTIL)  }
+WILE                      {  RET(CYCLE_WHILE)  }
 IM{SPACES}OUTTA           {  RET(CYCLE_END)  }
 
 HOW{SPACES}DUZ{SPACES}I   {  RET(FUNCTION_BEGIN)  }

@@ -9,11 +9,11 @@
     FunctionSignature *signature;
     Stmt *stmt;
     Expr *constant;    
-    Expr *term;
-    Expr *expr;
+    Expr *term; Expr *expr;
     Stmt *cycleStmt;
     Type *exprType;
     ExprList *list;
+    cycleType_t cycleType;
     char cycleOp;
     char varName[256];
     int intValue;
@@ -69,6 +69,7 @@
 /* Cycles */ 
 %token CYCLE_BEGIN
 %token SIGNATURE_SEPARATOR
+%token CYCLE_INC CYCLE_DEC CYCLE_UNTIL CYCLE_WHILE
 %token CYCLE_END
 
 /* Functions */
@@ -98,6 +99,8 @@
 %type <signature> func_arg_list
 %type <signature> func_signature
 %type <list> fc_expr_list
+%type <cycleOp> cycle_op
+%type <cycleType> cycle_type
 
 %%
 
@@ -149,9 +152,7 @@ stmt
     | VISIBLE expr_list { $$ = new StmtPrint($2, true); }
     | VISIBLE expr_list VISIBLE_FLAG { $$ = new StmtPrint($2, false); }
     | GET_LINE VARIABLE_ID { $$ = new StmtGetLine($2); }
-    | VARIABLE_ID VARIABLE_ASSIGN assign_expr { $$ = new StmtVariableDecl($1, $3); }
-    | VARIABLE_ID VARIABLE_TYPE_CHANGE expr_type { $$ = new StmtVariableCast($1, $3); }
-    | IF_BEGIN newline true_block else_if_block_list false_block IF_END { $$ = new StmtConditional($3, $4, $5); }
+    | VARIABLE_ID VARIABLE_ASSIGN assign_expr { $$ = new StmtVariableDecl($1, $3); } | VARIABLE_ID VARIABLE_TYPE_CHANGE expr_type { $$ = new StmtVariableCast($1, $3); } | IF_BEGIN newline true_block else_if_block_list false_block IF_END { $$ = new StmtConditional($3, $4, $5); }
     | FUNCTION_BEGIN VARIABLE_ID func_signature '\n' stmt_list FUNCTION_END { $$ = new StmtFunction($2, $3, $5); } 
     | FUNCTION_RETURN_NULL { $$ = new StmtFunctionReturn(NULL); }
     | FUNCTION_RETURN expr { $$ = new StmtFunctionReturn($2); }
@@ -159,6 +160,8 @@ stmt
     | SL_COMMENT { $$ = NULL; }
     | ML_COMMENT_BEGIN ML_COMMENT_END { $$ = NULL; }
     | CYCLE_BEGIN SIGNATURE_SEPARATOR VARIABLE_ID '\n' stmt_list CYCLE_END SIGNATURE_SEPARATOR VARIABLE_ID { $$ = new StmtCycle($3, $5, $8); } 
+    | CYCLE_BEGIN SIGNATURE_SEPARATOR VARIABLE_ID cycle_op SIGNATURE_SEPARATOR VARIABLE_ID '\n' stmt_list CYCLE_END SIGNATURE_SEPARATOR VARIABLE_ID { $$ = new StmtCycle($3, $4, $6, CT_WHILE, NULL, $8, $11); }
+    | CYCLE_BEGIN SIGNATURE_SEPARATOR VARIABLE_ID cycle_op SIGNATURE_SEPARATOR VARIABLE_ID cycle_type expr '\n' stmt_list CYCLE_END SIGNATURE_SEPARATOR VARIABLE_ID { $$ = new StmtCycle($3, $4, $6, $7, $8, $10, $13); }
     | expr { $$ = new StmtBareExpr($1); }
     ;
 
@@ -186,6 +189,16 @@ expr
     | NOT_EQUALS expr arg_separator expr { $$ = new ExprComparison($2, $4, '!'); }
     /* Values */
     | term { $$ = $1; } 
+    ;
+
+cycle_type
+    : CYCLE_WHILE { $$ = CT_WHILE; }
+    | CYCLE_UNTIL { $$ = CT_UNTIL; }
+    ;
+
+cycle_op
+    : CYCLE_INC { $$ = '+'; }
+    | CYCLE_DEC { $$ = '-'; }
     ;
 
 fc_expr_list

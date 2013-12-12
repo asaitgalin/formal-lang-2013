@@ -25,6 +25,11 @@ enum blockType_t {
     BT_FUNCTION
 };
 
+enum cycleType_t {
+    CT_UNTIL = 0,
+    CT_WHILE
+};
+
 class CodeBlock {
 public:
 
@@ -384,15 +389,60 @@ public:
     StmtCycle(const char *label, StmtList *stmts, const char *endLabel):
         label_(label),
         stmts_(stmts),
-        endLabel_(endLabel)
+        endLabel_(endLabel),
+        isIteration_(false)
     { }
+
+    StmtCycle(const char *label, char op, const char *var, cycleType_t type, Expr *expr, StmtList *stmts, const char *endLabel):
+        label_(label),
+        op_(op),
+        var_(var), 
+        type_(type),
+        expr_(expr),
+        stmts_(stmts),
+        endLabel_(endLabel),
+        isIteration_(true)
+    { } 
 
     virtual stmtResult_t execute(CodeBlock *block);
 
 private:
+    
+    bool executeList(CodeBlock *block);
+    
+    bool canContinue(CodeBlock *block) {
+        if (type_ == CT_WHILE) {
+            return expr_->eval(block)->toBoolean();
+        } else {
+            return !expr_->eval(block)->toBoolean();
+        }
+    }
+
+    void updateCounter(CodeBlock *block) {
+        Value *current = block->getLocalVariable(var_);
+        bool res;
+        int currentValue = current->toInteger(res);
+        if (!res) {
+            raiseMachineError("cannot convert local variable to int");
+        }
+        if (op_ == '+') {
+            block->setLocalVariable(var_, new IntValue(currentValue + 1));
+        } else {
+            block->setLocalVariable(var_, new IntValue(currentValue - 1));
+        }
+        delete current;
+    }
+
+    // Standard loop (infinite)
     std::string label_;
     StmtList *stmts_;
     std::string endLabel_;
+    // Iteration loop
+    std::string var_;
+    char op_;
+    cycleType_t type_;
+    Expr *expr_;
+    bool isIteration_;
 };
 
 /* ===== Expressions ===== */ 
